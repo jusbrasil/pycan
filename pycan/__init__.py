@@ -5,90 +5,90 @@ import operator
 
 _permissions = {}
 
-def allow_to_all(user, app_context, resource):
+def allow_to_all(user, context, resource):
      return True
 
-def can(action_set, context_set, authorization, get_authorization_resource=lambda _, __: None,
-        get_resource=lambda _, __: None, exception=None):
+def can(action_set, target_set, authorization, load_before=lambda _, __: None,
+        load_after=lambda _, __: None, exception=None):
     assert authorization, "An authorization procedure must be specified"
-    assert getattr(get_authorization_resource, '__call__'), "get_authorization_resource must be callable"
-    assert getattr(get_resource, '__call__'), "get_resource must be callable"
-    assert getattr(authorization, '__call__'), "get_resource must be callable"
+    assert getattr(load_before, '__call__'), "load_before must be callable"
+    assert getattr(load_after, '__call__'), "load_after must be callable"
+    assert getattr(authorization, '__call__'), "load_after must be callable"
 
-    assert len(inspect.getargspec(get_authorization_resource).args) == 2, \
-        "get_authorization_resource must accept 2 parameters"
-    assert len(inspect.getargspec(get_resource).args) == 2, "get_resource must accept 2 parameters"
+    assert len(inspect.getargspec(load_before).args) == 2, \
+        "load_before must accept 2 parameters"
+    assert len(inspect.getargspec(load_after).args) == 2, "load_after must accept 2 parameters"
     _assert_authorization_parameters(authorization)
 
-    if not _is_sequence(context_set):
-        context_set = [context_set]
+    if not _is_sequence(target_set):
+        target_set = [target_set]
 
     if not _is_sequence(action_set):
         action_set = [action_set]
     elif "*" in action_set and len(action_set) > 1:
         raise exceptions.ActionListWithAsteriskError("* must be a solo action")
 
-    for context in context_set:
-        if context not in _permissions:
-            _permissions[context] = {}
+    for target in target_set:
+        if target not in _permissions:
+            _permissions[target] = {}
 
-        if "*" in _permissions[context]:
-            raise exceptions.ContextAlreadyHasAsteriskError("The context \"%s\" already has an \"*\"" % context)
+        if "*" in _permissions[target]:
+            raise exceptions.ContextAlreadyHasAsteriskError("The target \"%s\" already has an \"*\"" % target)
 
         for action in action_set:
-            if action == "*" and len(_permissions[context]) > 0:
+            if action == "*" and len(_permissions[target]) > 0:
                 raise exceptions.ContextAlreadyHasActionsError(
-                    "Can't register \"*\" cause the context \"%s\" already has action_set" % context)
+                    "Can't register \"*\" cause the target \"%s\" already has action_set" % target)
 
-            if action in _permissions[context]:
+            if action in _permissions[target]:
                 raise exceptions.ActionAlreadyExistsError(
-                    "The \"%s\" permission for this context resource has already been specified" % action)
+                    "The \"%s\" permission for this target resource has already been specified" % action)
 
-            _permissions[context][action] = {
+            _permissions[target][action] = {
                 'exception': exception,
                 'authorization': authorization,
-                'get_authorization_resource': get_authorization_resource,
-                'get_resource': get_resource,
+                'load_before': load_before,
+                'load_after': load_after,
             }
 
 
-def can_i(action, context, user=None, app_context=None):
+def can_i(action, target, user=None, context=None):
     result = False
     auth_resource = None
     resource = None
     exception = False
 
-    context_action_set = _permissions.get(context, {})
-    authorization_data = context_action_set.get(action) or context_action_set.get("*")
+    target_action_set = _permissions.get(target, {})
+    authorization_data = target_action_set.get(action) or target_action_set.get("*")
 
     if authorization_data is not None:
-        auth_resource = authorization_data.get('get_authorization_resource')(user, app_context)
+        auth_resource = authorization_data.get('load_before')(user, context)
         
         result = authorization_data.get('authorization')(
             user,
-            app_context,
+            context,
             auth_resource)
 
         if result:
-            resource = authorization_data.get('get_resource')(user, app_context)
+            resource = authorization_data.get('load_after')(user, context)
 
     return result, auth_resource, resource, 
 
 
-def authorize(action, context, user, app_context=None):
-    go_ahead, auth_resource, resource= can_i(action, context, user, app_context)
+def authorize(action, target, user, context=None):
+    go_ahead, auth_resource, resource= can_i(action, target, user, context)
 
     if go_ahead:
         return auth_resource, resource
     else:
-         exception = ((_permissions.get(context, {})).get(action, {})).get("exception")
+         exception = ((_permissions.get(target, {})).get(action, {})).get("exception")
          raise exception(
             action=action,
-            context=context,
+            target=target,
             user=user,
-            app_context=app_context,
+            context=context,
             resource=resource
-         ) if exception else exceptions.UnauthorizedResourceError(action, context, user, app_context, resource)
+         ) if exception else exceptions.UnauthorizedResourceError(action, target, user, context, resource)
 
 
 def and_(*args):
@@ -119,15 +119,15 @@ def _is_sequence(arg):
             hasattr(arg, "__iter__"))
 
 
-def revoke(action_set, context_set):
+def revoke(action_set, target_set):
     if(not _is_sequence(action_set)):
         action_set = [action_set]
 
-    if(not _is_sequence(context_set)):
-        context_set = [context_set]
+    if(not _is_sequence(target_set)):
+        target_set = [target_set]
 
-    for context in context_set:
-        if context  in _permissions:
+    for target in target_set:
+        if target  in _permissions:
             for action in action_set:
-                _permissions[context].pop(action)
+                _permissions[target].pop(action)
 
