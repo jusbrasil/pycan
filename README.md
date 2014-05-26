@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jusbrasil/pycan.svg?branch=master)](https://travis-ci.org/jusbrasil/pycan)
+
 #PyCan
 
 PyCan is a framework-agnostic open source authorization library that can be easily integrated with any Python application.
