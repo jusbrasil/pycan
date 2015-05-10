@@ -11,6 +11,5 @@ setup(
     author=u'Vicente Carlos de Alencar Jr',
     packages=find_packages(),
     include_package_data=True,
-    tests_require=['mock'],
-    setup_requires=['nose>=1.0', 'coverage']
+    tests_require=['mock', 'nose>=1.0', 'coverage']
 )
